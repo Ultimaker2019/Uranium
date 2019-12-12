@@ -72,7 +72,7 @@ class Application:
         self._main_thread = threading.current_thread()  # type: threading.Thread
 
         self.default_theme = self._app_name  # type: str # Default theme is the application name
-        self._default_language = "en_US"  # type: str
+        self._default_language = "ja_JP"  # type: str
 
         self.change_log_url = "https://github.com/Ultimaker/Uranium"  # Where to find a more detailed description of the recent updates.
 
