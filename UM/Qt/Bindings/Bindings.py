@@ -28,6 +28,7 @@ from . import i18nCatalogProxy
 from . import ExtensionModel
 from . import VisibleMessagesModel
 from . import Utilities
+from . import ConnectToPrintManager
 
 from UM.Settings.Models.SettingDefinitionsModel import SettingDefinitionsModel
 from UM.Settings.Models.DefinitionContainersModel import DefinitionContainersModel
@@ -92,6 +93,7 @@ class Bindings:
         qmlRegisterType(i18nCatalogProxy.i18nCatalogProxy, "UM", 1, 1, "I18nCatalog")
 
         qmlRegisterSingletonType(OutputDeviceManagerProxy.OutputDeviceManagerProxy, "UM", 1, 1, "OutputDeviceManager", OutputDeviceManagerProxy.createOutputDeviceManagerProxy)
+        qmlRegisterSingletonType(ConnectToPrintManager.ConnectToPrintManager, "UM", 1, 1, "ConnectToPrintManager", ConnectToPrintManager.createConnectToPrintManager)
 
         # Additions after 2.1. Uses API version 1.2
         qmlRegisterType(SettingDefinitionsModel, "UM", 1, 2, "SettingDefinitionsModel")
