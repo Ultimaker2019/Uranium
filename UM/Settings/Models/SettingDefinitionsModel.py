@@ -585,7 +585,14 @@ class SettingDefinitionsModel(QAbstractListModel):
         if self._visibility_handler:
             self._visible = self._visibility_handler.getVisible()
 
-        self.dataChanged.emit(self.index(0, 0), self.index(len(self._row_index_list), 0), [self.VisibleRole])
+        if self._show_all:
+            # We only need to emit the data in the case of the show all, otherwise the
+            # data will be filtered anyway.
+            # it should be possible (and faster) to emit a single datachanged, but this
+            # caused problems with the settingVisibilityPreference panel.
+            # I couldn't figure that out, so perhaps it's worht it to re-evaluate this later
+            for row in range(len(self._row_index_list)):
+                self.dataChanged.emit(self.index(row, 0), self.index(row, 0), [self.VisibleRole])
 
         self._updateVisibleRows()
 

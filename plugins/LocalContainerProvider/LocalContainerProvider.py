@@ -5,7 +5,7 @@ import os  # For getting the IDs from a filename.
 import pickle  # For caching definitions.
 import re  # To detect back-up files in the ".../old/#/..." folders.
 import urllib.parse  # For interpreting escape characters using unquote_plus.
-from typing import Any, Dict, Iterable, Optional, Set
+from typing import Any, Dict, Iterable, Optional, Set, Tuple
 
 from UM.Application import Application  # To get the current version for finding the cache directory.
 from UM.ConfigurationErrorMessage import ConfigurationErrorMessage
@@ -294,7 +294,13 @@ class LocalContainerProvider(ContainerProvider):
             # See CURA-4024.
             Logger.log("w", "The definition cache for definition {definition_id} failed to pickle.".format(definition_id = definition.getId()))
             if os.path.exists(cache_path):
-                os.remove(cache_path)  # The pickling might be half-complete, which causes EOFError in Pickle when you load it later.
+                try:
+                    os.remove(cache_path)  # The pickling might be half-complete, which causes EOFError in Pickle when you load it later.
+                except PermissionError:
+                    # Someone else is touching this file.
+                    Logger.log("w", "Unable to remove picked file as another process has access to it %s", cache_path)
+        except PermissionError:
+            Logger.log("w", "Cura didn't get permission to save the definition {definition_id}".format(definition_id = definition.getId()))
 
     def _updatePathCache(self) -> None:
         """Updates the cache of paths to containers.
@@ -314,14 +320,32 @@ class LocalContainerProvider(ContainerProvider):
             if re.search(old_file_expression, filename):
                 continue  # This is a back-up file from an old version.
 
-            container_id = self._pathToId(filename)
+            container_id, mime = self._pathToIdAndMime(filename)
             if not container_id:
                 continue
-            mime = self._pathToMime(filename)
             if not mime:
                 continue
             self._id_to_path[container_id] = filename
             self._id_to_mime[container_id] = mime
+
+    @staticmethod
+    def _pathToIdAndMime(path: str) -> Tuple[Optional[str], Optional[MimeType]]:
+        """ Faster combination of _pathToMime and _pathToID
+
+            When we want to know the mime and the ID, it's better to use this function, as this prevents an extra
+            mime detection from having to be made.
+        """
+        try:
+            mime = MimeTypeDatabase.getMimeTypeForFile(path)
+        except MimeTypeDatabase.MimeTypeNotFoundError:
+            Logger.log("w", "MIME type could not be found for file: {path}, ignoring it.".format(path = path))
+            return None, None
+        if mime.name not in ContainerRegistry.mime_type_map:  # The MIME type is known, but it's not a container.
+            return None, None
+        recovered_id = None
+        if mime:
+            recovered_id = urllib.parse.unquote_plus(mime.stripExtension(os.path.basename(path)))
+        return recovered_id, mime
 
     @staticmethod
     def _pathToMime(path: str) -> Optional[MimeType]:

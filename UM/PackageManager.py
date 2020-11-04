@@ -172,10 +172,10 @@ class PackageManager(QObject):
         with container_registry.lockFile():
             try:
                 # Load the user packages:
-                with open(cast(str, self._user_package_management_file_path), "r", encoding="utf-8") as f:
+                with open(cast(str, self._user_package_management_file_path), "r", encoding = "utf-8") as f:
                     try:
                         management_dict = json.load(f)
-                    except JSONDecodeError:
+                    except (JSONDecodeError, UnicodeDecodeError):
                         # The file got corrupted, ignore it. This happens extremely infrequently.
                         # The file will get overridden once a user downloads something.
                         return
@@ -186,6 +186,9 @@ class PackageManager(QObject):
                     Logger.log("i", "Loaded user packages management file from %s", self._user_package_management_file_path)
             except FileNotFoundError:
                 Logger.log("i", "User package management file %s doesn't exist, do nothing", self._user_package_management_file_path)
+                return
+            except EnvironmentError:
+                Logger.warning("User package management file is inaccessible! Can't see if we need to install packages!")
                 return
 
         # For packages that become bundled in the new releases, but a lower version was installed previously, we need
@@ -562,7 +565,11 @@ class PackageManager(QObject):
             if not os.path.exists(src_dir_path):
                 Logger.log("w", "The path %s does not exist, so not installing the files", src_dir_path)
                 continue
-            self.__installPackageFiles(package_id, src_dir_path, dst_dir_path)
+            try:
+                self.__installPackageFiles(package_id, src_dir_path, dst_dir_path)
+            except EnvironmentError as e:
+                Logger.log("e", "Can't install package due to EnvironmentError: {err}".format(err = str(e)))
+                continue
 
         # Remove the file
         try:
@@ -580,6 +587,8 @@ class PackageManager(QObject):
             shutil.move(src_dir, dst_dir)
         except FileExistsError:
             Logger.log("w", "Not moving %s to %s as the destination already exists", src_dir, dst_dir)
+        except EnvironmentError as e:
+            Logger.log("e", "Can't install package, operating system is blocking it: {err}".format(err = str(e)))
 
     # Gets package information from the given file.
     def getPackageInfo(self, filename: str) -> Dict[str, Any]:
@@ -602,7 +611,7 @@ class PackageManager(QObject):
                         except:
                             Logger.logException("e", "Failed to load potential package.json file '%s' as text file.",
                                                 file_info.filename)
-        except zipfile.BadZipFile:
+        except (zipfile.BadZipFile, LookupError):  # Corrupt zip file, or unknown encoding.
             Logger.logException("e", "Failed to unpack the file %s", filename)
         return package_json
 
@@ -629,7 +638,7 @@ class PackageManager(QObject):
         except zipfile.BadZipFile as e:
             Logger.error("Package is corrupt: {err}".format(err = str(e)))
             license_string = None
-        except UnicodeDecodeError:
+        except (UnicodeDecodeError, LookupError):
             Logger.error("Package filenames are not UTF-8 encoded! Encoding unknown.")
             license_string = None
         return license_string
