@@ -1,5 +1,6 @@
-# Copyright (c) 2018 Ultimaker B.V.
+# Copyright (c) 2020 Ultimaker B.V.
 # Uranium is released under the terms of the LGPLv3 or higher.
+
 import json
 import os
 import shutil
@@ -244,14 +245,17 @@ class PackageManager(QObject):
         # Need to use the file lock here to prevent concurrent I/O from other processes/threads
         container_registry = self._application.getContainerRegistry()
         with container_registry.lockFile():
-            with open(cast(str,self._user_package_management_file_path), "w", encoding = "utf-8") as f:
-                data_dict = {"version": PackageManager.Version,
-                             "installed": self._installed_package_dict,
-                             "to_remove": list(self._to_remove_package_set),
-                             "to_install": self._to_install_package_dict,
-                             "dismissed": list(self._dismissed_packages)}
-                json.dump(data_dict, f, sort_keys = True, indent = 4)
-                Logger.log("i", "Package management file %s was saved", self._user_package_management_file_path)
+            try:
+                with open(cast(str,self._user_package_management_file_path), "w", encoding = "utf-8") as f:
+                    data_dict = {"version": PackageManager.Version,
+                                 "installed": self._installed_package_dict,
+                                 "to_remove": list(self._to_remove_package_set),
+                                 "to_install": self._to_install_package_dict,
+                                 "dismissed": list(self._dismissed_packages)}
+                    json.dump(data_dict, f, sort_keys = True, indent = 4)
+                    Logger.log("i", "Package management file %s was saved", self._user_package_management_file_path)
+            except EnvironmentError as e:  # Can't save for whatever reason (permissions, missing directory, hard drive full, etc).
+                Logger.error("Unable to save package management file to {path}: {err}".format(path = self._user_package_management_file_path, err = str(e)))
 
     # (for initialize) Removes all packages that have been scheduled to be removed.
     def _removeAllScheduledPackages(self) -> None:
@@ -608,19 +612,26 @@ class PackageManager(QObject):
         license_string = None
         def is_license(zipinfo: zipfile.ZipInfo) -> bool:
             return os.path.basename(zipinfo.filename).startswith("LICENSE")
-        with zipfile.ZipFile(filename) as archive:
-            # Go through all the files and use the first successful read as the result
-            license_files = sorted(filter(is_license, archive.infolist()), key = lambda x: len(x.filename))  # Find the one with the shortest path.
-            for file_info in license_files:
-                Logger.log("d", "Found potential license file '{filename}'".format(filename = file_info.filename))
-                try:
-                    with archive.open(file_info.filename, "r") as f:
-                        data = f.read()
-                    license_string = data.decode("utf-8")
-                    break
-                except:
-                    Logger.logException("e", "Failed to load potential license file '%s' as text file.", file_info.filename)
-                    license_string = None
+        try:
+            with zipfile.ZipFile(filename) as archive:
+                # Go through all the files and use the first successful read as the result
+                license_files = sorted(filter(is_license, archive.infolist()), key = lambda x: len(x.filename))  # Find the one with the shortest path.
+                for file_info in license_files:
+                    Logger.log("d", "Found potential license file '{filename}'".format(filename = file_info.filename))
+                    try:
+                        with archive.open(file_info.filename, "r") as f:
+                            data = f.read()
+                        license_string = data.decode("utf-8")
+                        break
+                    except:
+                        Logger.logException("e", "Failed to load potential license file '%s' as text file.", file_info.filename)
+                        license_string = None
+        except zipfile.BadZipFile as e:
+            Logger.error("Package is corrupt: {err}".format(err = str(e)))
+            license_string = None
+        except UnicodeDecodeError:
+            Logger.error("Package filenames are not UTF-8 encoded! Encoding unknown.")
+            license_string = None
         return license_string
 
     @staticmethod
