@@ -16,7 +16,7 @@ class ConnectToPrintManager(QObject):
 
     @pyqtSlot()
     def run(self):
-        serch_path0 = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../resources/run', 'USBprint2.exe'))
+        serch_path0 = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../resources/run', 'USBprint2.exe'))
         command = [serch_path0]
         command += ['M2030']
         gcode_file_path = os.path.expanduser('~') + "\\AppData\\Local\\cura\\temp.gcode"
